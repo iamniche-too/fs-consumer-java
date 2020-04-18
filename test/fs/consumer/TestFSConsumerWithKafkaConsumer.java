@@ -57,9 +57,9 @@ public class TestFSConsumerWithKafkaConsumer {
 		Thread thread = new Thread(fsConsumer);
 		thread.start();
 		
-		// wait 30 seconds
+		// wait 60 seconds
 		try {	
-			Thread.sleep(30000);
+			Thread.sleep(60000);
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 		}

@@ -89,10 +89,10 @@ public class FSConsumer<K, V> implements Runnable {
 		this.totalKBs += messageSize;
 	}
 
-	private void reportThroughput() {
-		long throughputMbPerS = (long)(kBsInWindow / (THROUGHPUT_DEBUG_INTERVAL_SEC * KBS_IN_MB));
-		System.out.println("[FSConsumer] - Throughput in window: " + throughputMbPerS + " MB/s");
-		System.out.println("[FSConsumer] - Total transferred: " + (totalKBs/1000) + " MBs");
+	private void reportThroughput(long kBsInWindow, long windowLengthInSecs) {
+		float throughputMBPerS = (float)(kBsInWindow / (float)(windowLengthInSecs * KBS_IN_MB));
+		System.out.format("[FSConsumer] - Throughput in window (%d KB in %d secs): %.2f MB/s%n", kBsInWindow, windowLengthInSecs, throughputMBPerS);
+		System.out.format("[FSConsumer] - Total transferred: %d MBs%n", totalKBs/1000);
 	}
 
 	private void reportPeakMemoryUse() {
@@ -149,8 +149,8 @@ public class FSConsumer<K, V> implements Runnable {
 		}
 	}
 
-	private void report() {
-		reportThroughput();
+	private void report(long kBsInWindow, long windowLengthInSecs) {
+		reportThroughput(kBsInWindow, windowLengthInSecs);
 		reportPeakMemoryUse();
 		// reportToEndpoint();
 	}
@@ -199,10 +199,10 @@ public class FSConsumer<K, V> implements Runnable {
 					}
 
 					// Determine if we should report throughput
-					long windowLengthInSecs = (this.currentTime - this.windowStartTime);
+					long windowLengthInSecs = (this.currentTime - this.windowStartTime) / 1000;
 
 					if (windowLengthInSecs > THROUGHPUT_DEBUG_INTERVAL_SEC) {
-						report();
+						report(kBsInWindow, windowLengthInSecs);
 
 						// Reset ready for the next throughput indication
 						windowStartTime = System.currentTimeMillis();
