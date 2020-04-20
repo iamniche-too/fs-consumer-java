@@ -38,7 +38,7 @@ public class TestFSConsumerWithKafkaConsumer {
 		// Using 'latest' means the consumer must be started before the producer.
 		kafkaConsumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
-		// Required fr Java client
+		// Required for Java client
 		kafkaConsumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 		kafkaConsumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 

@@ -35,8 +35,8 @@ public class TestFSConsumerWithMockConsumer {
 		Properties fsConsumerConfig = new Properties();
 		fsConsumerConfig.put(FSConsumer.ENDPOINT_URL_CONFIG, "http://");
 
-		Consumer<String, byte[]> kafkaConsumer = new MockConsumer();
-		fsConsumer = new FSConsumer(kafkaConsumer, topicNames, fsConsumerConfig);
+		Consumer<String, byte[]> mockConsumer = new MockConsumer();
+		fsConsumer = new FSConsumer(mockConsumer, topicNames, fsConsumerConfig);
 	}
 
 	@Test
@@ -44,7 +44,7 @@ public class TestFSConsumerWithMockConsumer {
 		Thread thread = new Thread(fsConsumer);
 		thread.start();
 		
-		// run for specified interval
+		// run for specific period
 		try {	
 			Thread.sleep(1000 * 60 * 5);
 		} catch (InterruptedException ex) {
