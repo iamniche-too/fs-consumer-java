@@ -15,6 +15,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.cache2k.benchmark.jmh.ForcedGcMemoryProfiler;
 
 /**
@@ -61,9 +62,9 @@ public class FSConsumer<K, V> implements Runnable {
 	private Properties properties;
 
 	private long initialMemoryUsageInBytes = 0;
-	
+
 	private long peakMemoryUsageInBytes = 0;
-	
+
 	public FSConsumer(Consumer consumer, List<String> topics, Properties properties) {
 		this.consumer = consumer;
 		this.properties = properties;
@@ -94,16 +95,18 @@ public class FSConsumer<K, V> implements Runnable {
 	}
 
 	private void reportThroughput(long kBsInWindow, long windowLengthInSecs) {
-		float throughputMBPerS = (float)(kBsInWindow / (float)(windowLengthInSecs * KBS_IN_MB));
-		System.out.format("[FSConsumer] - Throughput in window (%d KB in %d secs): %.2f MB/s%n", kBsInWindow, windowLengthInSecs, throughputMBPerS);
-		System.out.format("[FSConsumer] - Total transferred: %d MBs%n", totalKBs/1000);
+		float throughputMBPerS = (float) (kBsInWindow / (float) (windowLengthInSecs * KBS_IN_MB));
+		System.out.format("[FSConsumer] - Throughput in window (%d KB in %d secs): %.2f MB/s%n", kBsInWindow,
+				windowLengthInSecs, throughputMBPerS);
+		System.out.format("[FSConsumer] - Total transferred: %d MBs%n", totalKBs / 1000);
 	}
 
 	private void reportPeakMemoryUse() {
 		long settledMemoryInBytes = getSettledUsedMemory();
-		
-		System.out.println("[FSConsumer] (from ForcedGcMemoryProfiler) Heap + Non-heap post-GC memory usage: " + getSettledUsedMemory() + "");
-		
+
+		System.out.println("[FSConsumer] (from ForcedGcMemoryProfiler) Heap + Non-heap post-GC memory usage: "
+				+ getSettledUsedMemory() + "");
+
 		if (settledMemoryInBytes > peakMemoryUsageInBytes) {
 			peakMemoryUsageInBytes = settledMemoryInBytes;
 		}
@@ -139,8 +142,9 @@ public class FSConsumer<K, V> implements Runnable {
 		do {
 			try {
 				Thread.sleep(567);
-			} catch (InterruptedException e) {}
-			
+			} catch (InterruptedException e) {
+			}
+
 			m = m2;
 			m2 = ForcedGcMemoryProfiler.getUsedMemory();
 		} while (m2 < getReallyUsedMemory());
@@ -181,7 +185,7 @@ public class FSConsumer<K, V> implements Runnable {
 
 		// record initial memory use
 		initialMemoryUsageInBytes = getSettledUsedMemory();
-		
+
 		try {
 			noMessageReportTime = System.currentTimeMillis();
 			windowStartTime = System.currentTimeMillis();
@@ -189,8 +193,7 @@ public class FSConsumer<K, V> implements Runnable {
 			while (!shutdown.get()) {
 				try {
 					// System.out.println("[FSConsumer] - Polling...");
-					ConsumerRecords<String, byte[]> records = this.consumer
-							.poll(Duration.ofMillis(POLL_INTERVAL_IN_MS));
+					ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(POLL_INTERVAL_IN_MS));
 					currentTime = System.currentTimeMillis();
 
 					if (records != null) {
@@ -211,6 +214,7 @@ public class FSConsumer<K, V> implements Runnable {
 						processNoMessage();
 					}
 
+					consumer.commitAsync();
 					// Determine if we should report throughput
 					long windowLengthInSecs = (this.currentTime - this.windowStartTime) / 1000;
 
@@ -221,12 +225,15 @@ public class FSConsumer<K, V> implements Runnable {
 						windowStartTime = System.currentTimeMillis();
 						kBsInWindow = 0;
 					}
+				} catch (WakeupException e) {
+					// Ignore exception if closing
+					if (!shutdown.get()) throw e;
 				} catch (KafkaException e) {
 					System.out.println("KafkaException from client: " + e.getMessage());
 				}
 			}
 		} finally {
-			this.consumer.close();
+			consumer.close();
 			shutdownLatch.countDown();
 		}
 
@@ -235,10 +242,10 @@ public class FSConsumer<K, V> implements Runnable {
 
 	public void shutdown() throws InterruptedException {
 		System.out.println("[FSConsumer] - Shutting down...");
-		
+
 		System.out.format("[FSConsumer] peakMemoryUsageInBytes=%d%n", peakMemoryUsageInBytes);
 		System.out.format("[FSConsumer] memoryIncrease=%d%n", (peakMemoryUsageInBytes - initialMemoryUsageInBytes));
-		
+
 		shutdown.set(true);
 		shutdownLatch.await();
 	}
