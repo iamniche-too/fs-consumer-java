@@ -1,6 +1,6 @@
 package fs.consumer;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;

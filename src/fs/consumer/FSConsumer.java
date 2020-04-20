@@ -60,6 +60,10 @@ public class FSConsumer<K, V> implements Runnable {
 
 	private Properties properties;
 
+	private long initialMemoryUsageInBytes = 0;
+	
+	private long peakMemoryUsageInBytes = 0;
+	
 	public FSConsumer(Consumer consumer, List<String> topics, Properties properties) {
 		this.consumer = consumer;
 		this.properties = properties;
@@ -96,7 +100,13 @@ public class FSConsumer<K, V> implements Runnable {
 	}
 
 	private void reportPeakMemoryUse() {
-		System.out.println("[FSConsumer] - Memory: Heap + Non-heap post-GC memory usage: " + getSettledUsedMemory() + "");
+		long settledMemoryInBytes = getSettledUsedMemory();
+		
+		System.out.println("[FSConsumer] (from ForcedGcMemoryProfiler) Heap + Non-heap post-GC memory usage: " + getSettledUsedMemory() + "");
+		
+		if (settledMemoryInBytes > peakMemoryUsageInBytes) {
+			peakMemoryUsageInBytes = settledMemoryInBytes;
+		}
 	}
 
 	private long getCurrentlyUsedMemory() {
@@ -169,6 +179,9 @@ public class FSConsumer<K, V> implements Runnable {
 	public void run() {
 		System.out.println("[FSConsumer] - Running...");
 
+		// record initial memory use
+		initialMemoryUsageInBytes = getSettledUsedMemory();
+		
 		try {
 			noMessageReportTime = System.currentTimeMillis();
 			windowStartTime = System.currentTimeMillis();
@@ -222,6 +235,10 @@ public class FSConsumer<K, V> implements Runnable {
 
 	public void shutdown() throws InterruptedException {
 		System.out.println("[FSConsumer] - Shutting down...");
+		
+		System.out.format("[FSConsumer] peakMemoryUsageInBytes=%d%n", peakMemoryUsageInBytes);
+		System.out.format("[FSConsumer] memoryIncrease=%d%n", (peakMemoryUsageInBytes - initialMemoryUsageInBytes));
+		
 		shutdown.set(true);
 		shutdownLatch.await();
 	}

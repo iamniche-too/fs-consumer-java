@@ -1,4 +1,6 @@
 ./target/classes/**
+./target/maven-status/**
+./target/surefire-reports/**
 ./bin/**
 .settings
 .classpath
