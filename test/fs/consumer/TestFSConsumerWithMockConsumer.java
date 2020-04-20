@@ -44,9 +44,9 @@ public class TestFSConsumerWithMockConsumer {
 		Thread thread = new Thread(fsConsumer);
 		thread.start();
 		
-		// run for 60 seconds
+		// run for specified interval
 		try {	
-			Thread.sleep(60000);
+			Thread.sleep(1000 * 60 * 5);
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 		}

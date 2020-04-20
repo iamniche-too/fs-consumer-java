@@ -39,9 +39,9 @@ public class TestFSConsumerWithKafkaConsumer {
 		kafkaConsumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
 
 		// Required fr Java client
-		kafkaConsumerConfig.put("key.deserializer","org.apache.kafka.common.serialization.StringDeserializer");
-		kafkaConsumerConfig.put("value.deserializer","org.apache.kafka.common.serialization.ByteArrayDeserializer");
-		
+		kafkaConsumerConfig.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+		kafkaConsumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+
 		List<String> topicNames = new ArrayList<String>();
 		topicNames.add("sensor1");
 
@@ -56,21 +56,21 @@ public class TestFSConsumerWithKafkaConsumer {
 	public void testFSConsumer() {
 		Thread thread = new Thread(fsConsumer);
 		thread.start();
-		
-		// wait 60 seconds
-		try {	
-			Thread.sleep(60000);
+
+		// run for specified interval
+		try {
+			Thread.sleep(1000 * 60 * 5);
 		} catch (InterruptedException ex) {
 			Thread.currentThread().interrupt();
 		}
-		
+
 		// wait for thread to exit
-		try {	
+		try {
 			fsConsumer.shutdown();
 			thread.join();
 		} catch (InterruptedException ex) {
 		}
-		
+
 		assertEquals(0, fsConsumer.getTotalKbs());
 	}
 }
