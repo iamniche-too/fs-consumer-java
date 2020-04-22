@@ -54,13 +54,12 @@ public class FSConsumerMain {
 			topicNames.add("sensor" + i);
 		}
 
-		Properties fsConsumerConfig = new Properties();
-		fsConsumerConfig.put(FSConsumer.ENDPOINT_URL_CONFIG, "http://");
+		//Properties fsConsumerConfig = new Properties();
+		//fsConsumerConfig.put(FSConsumer.ENDPOINT_URL_CONFIG, "http://");
 
 		System.out.format("Connecting to Kafka Server on %s%n", GCP_BOOTSTRAP_SERVERS);
 		KafkaConsumer<Integer, String> kafkaConsumer = new KafkaConsumer<Integer, String>(kafkaConsumerConfig);
-		FSConsumer<Integer, String> fsConsumer = new FSConsumer<Integer, String>(kafkaConsumer, topicNames,
-				fsConsumerConfig);
+		FSConsumer<Integer, String> fsConsumer = new FSConsumer<Integer, String>(kafkaConsumer, topicNames);
 
 		fsConsumer.run();
 	}

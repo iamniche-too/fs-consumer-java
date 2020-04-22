@@ -34,11 +34,11 @@ public class TestFSConsumerWithMockConsumer {
 		List<String> topicNames = new ArrayList<String>();
 		topicNames.add("sensor1");
 
-		Properties fsConsumerConfig = new Properties();
-		fsConsumerConfig.put(FSConsumer.ENDPOINT_URL_CONFIG, "http://");
+		//Properties fsConsumerConfig = new Properties();
+		//fsConsumerConfig.put(FSConsumer.ENDPOINT_URL_CONFIG, "http://");
 
 		Consumer<String, byte[]> mockConsumer = new MockConsumer();
-		fsConsumer = new FSConsumer(mockConsumer, topicNames, fsConsumerConfig);
+		fsConsumer = new FSConsumer(mockConsumer, topicNames);
 	}
 
 	@Test
@@ -60,6 +60,6 @@ public class TestFSConsumerWithMockConsumer {
 		} catch (InterruptedException ex) {
 		}
 		
-		assertTrue(fsConsumer.getTotalKbs() > 0);
+		assertTrue(fsConsumer.getTotalKbsTransferred() > 0);
 	}
 }

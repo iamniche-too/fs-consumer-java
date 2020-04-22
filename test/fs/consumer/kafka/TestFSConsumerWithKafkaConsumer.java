@@ -12,8 +12,6 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import fs.consumer.kafka.FSConsumer;
-
 public class TestFSConsumerWithKafkaConsumer {
 
 	public FSConsumer<String, byte[]> fsConsumer;
@@ -45,13 +43,13 @@ public class TestFSConsumerWithKafkaConsumer {
 		kafkaConsumerConfig.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
 		List<String> topicNames = new ArrayList<String>();
-		topicNames.add("sensor1");
+		topicNames.add("test-topic");
 
-		Properties fsConsumerConfig = new Properties();
-		fsConsumerConfig.put(FSConsumer.ENDPOINT_URL_CONFIG, "http://");
+		//Properties fsConsumerConfig = new Properties();
+		//fsConsumerConfig.put(FSConsumer.ENDPOINT_URL_CONFIG, "http://");
 
 		KafkaConsumer<String, byte[]> kafkaConsumer = new KafkaConsumer(kafkaConsumerConfig);
-		fsConsumer = new FSConsumer(kafkaConsumer, topicNames, fsConsumerConfig);
+		fsConsumer = new FSConsumer(kafkaConsumer, topicNames);
 	}
 
 	@Test
@@ -73,6 +71,6 @@ public class TestFSConsumerWithKafkaConsumer {
 		} catch (InterruptedException ex) {
 		}
 
-		assertEquals(0, fsConsumer.getTotalKbs());
+		assertEquals(0, fsConsumer.getTotalKbsTransferred());
 	}
 }
