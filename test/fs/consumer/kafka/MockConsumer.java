@@ -1,6 +1,5 @@
 package fs.consumer.kafka;
 
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;

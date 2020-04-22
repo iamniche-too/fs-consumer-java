@@ -42,7 +42,7 @@ public class FSConsumer<K, V> extends AConsumer {
 		
 		System.out.format("[FSConsumer] - peakMemoryUsageInBytes=%d%n", peakMemoryUsageInBytes);
 		System.out.format("[FSConsumer] - memoryIncreaseInBytes=%d%n", memoryIncreaseInBytes);
-		System.out.format("[MemoryUseReportingConsumer] delta=%d%n", (memoryIncreaseInBytes - previousIncreaseInBytes));
+		System.out.format("[FSConsumer] - delta=%d%n", (memoryIncreaseInBytes - previousIncreaseInBytes));
 		
 		previousIncreaseInBytes = memoryIncreaseInBytes;
 	}

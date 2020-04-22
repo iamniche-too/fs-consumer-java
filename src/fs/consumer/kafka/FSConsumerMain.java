@@ -61,6 +61,7 @@ public class FSConsumerMain {
 		KafkaConsumer<Integer, String> kafkaConsumer = new KafkaConsumer<Integer, String>(kafkaConsumerConfig);
 		FSConsumer<Integer, String> fsConsumer = new FSConsumer<Integer, String>(kafkaConsumer, topicNames);
 
-		fsConsumer.run();
+		Thread thread = new Thread(fsConsumer);
+		thread.start();
 	}
 }
