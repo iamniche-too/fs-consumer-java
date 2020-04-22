@@ -1,4 +1,4 @@
-package fs.consumer;
+package fs.consumer.kafka;
 
 import java.util.ArrayList;
 import java.util.List;

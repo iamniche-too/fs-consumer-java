@@ -1,4 +1,4 @@
-package fs.consumer;
+package fs.consumer.kafka;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
@@ -73,6 +73,9 @@ public class FSConsumer<K, V> implements Runnable {
 
 		this.shutdown = new AtomicBoolean(false);
 		this.shutdownLatch = new CountDownLatch(1);
+		
+		// record initial memory use
+		initialMemoryUsageInBytes = getSettledUsedMemory();
 	}
 
 	private Map<String, Object> processRecord(ConsumerRecord record) {
@@ -104,12 +107,12 @@ public class FSConsumer<K, V> implements Runnable {
 	private void reportPeakMemoryUse() {
 		long settledMemoryInBytes = getSettledUsedMemory();
 
-		System.out.println("[FSConsumer] (from ForcedGcMemoryProfiler) Heap + Non-heap post-GC memory usage: "
-				+ getSettledUsedMemory() + "");
-
 		if (settledMemoryInBytes > peakMemoryUsageInBytes) {
 			peakMemoryUsageInBytes = settledMemoryInBytes;
 		}
+		
+		System.out.format("[FSConsumer] - peakMemoryUsageInBytes=%d%n", peakMemoryUsageInBytes);
+		System.out.format("[FSConsumer] - memoryIncreaseInBytes=%d%n", (peakMemoryUsageInBytes - initialMemoryUsageInBytes));
 	}
 
 	private long getCurrentlyUsedMemory() {
@@ -183,9 +186,6 @@ public class FSConsumer<K, V> implements Runnable {
 	public void run() {
 		System.out.println("[FSConsumer] - Running...");
 
-		// record initial memory use
-		initialMemoryUsageInBytes = getSettledUsedMemory();
-
 		try {
 			noMessageReportTime = System.currentTimeMillis();
 			windowStartTime = System.currentTimeMillis();
@@ -242,10 +242,6 @@ public class FSConsumer<K, V> implements Runnable {
 
 	public void shutdown() throws InterruptedException {
 		System.out.println("[FSConsumer] - Shutting down...");
-
-		System.out.format("[FSConsumer] peakMemoryUsageInBytes=%d%n", peakMemoryUsageInBytes);
-		System.out.format("[FSConsumer] memoryIncrease=%d%n", (peakMemoryUsageInBytes - initialMemoryUsageInBytes));
-
 		shutdown.set(true);
 		shutdownLatch.await();
 	}

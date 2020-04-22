@@ -1,4 +1,4 @@
-package fs.consumer;
+package fs.consumer.kafka;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -11,6 +11,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import fs.consumer.kafka.FSConsumer;
 
 public class TestFSConsumerWithKafkaConsumer {
 

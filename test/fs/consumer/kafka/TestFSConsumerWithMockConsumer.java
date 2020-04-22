@@ -1,4 +1,4 @@
-package fs.consumer;
+package fs.consumer.kafka;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -11,6 +11,8 @@ import java.util.Random;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import fs.consumer.kafka.FSConsumer;
 
 public class TestFSConsumerWithMockConsumer {
 
