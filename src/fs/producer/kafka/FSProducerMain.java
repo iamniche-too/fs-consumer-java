@@ -14,6 +14,8 @@ public class FSProducerMain {
 
 	private static final String RATE_LIMIT = "RATE_LIMIT";
 	
+	private static final String BOOTSTRAP_SERVERS = "BOOTSTRAP_SERVERS";
+	
 	public static void main(String[] args) {
 
 		int messageSizeInKB;
@@ -33,8 +35,16 @@ public class FSProducerMain {
 			upperRateLimitInKB = 75000;
 		}
 		
+		String bootstrapServers;
+		if (envMap.containsKey(BOOTSTRAP_SERVERS)) {
+			bootstrapServers = envMap.get(BOOTSTRAP_SERVERS);
+		} else {
+			System.out.format("Warning - BOOTSTRAP_SERVERS missing from environment, defaulting to localhost:9092");
+			bootstrapServers = "localhost:9092";
+		}
+		
 		Properties props = new Properties();
-		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 		props.put(ProducerConfig.CLIENT_ID_CONFIG, "FSThrottledProducer");
 		props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
 		props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());

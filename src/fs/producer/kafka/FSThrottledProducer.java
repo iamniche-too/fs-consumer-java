@@ -1,5 +1,7 @@
 package fs.producer.kafka;
 
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -8,6 +10,7 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.cache2k.benchmark.jmh.ForcedGcMemoryProfiler;
 
 public class FSThrottledProducer implements Runnable {
 
@@ -45,6 +48,16 @@ public class FSThrottledProducer implements Runnable {
 
 	private byte[] payload = null;
 	
+	private long initialMemoryUsageInBytes = 0;
+
+	private long peakMemoryUsageInBytes = 0;
+
+	private long previousIncreaseInBytes = 0;
+	
+	private int reportMemoryCount = 1;
+	
+	private boolean isReportMemory = false;
+	
 	public FSThrottledProducer(KafkaProducer producer, String topic, int messageSizeInKB, int upperDataRateLimitKB) {
 		this.producer = producer;
 		this.messageSizeInKB = messageSizeInKB;
@@ -52,8 +65,67 @@ public class FSThrottledProducer implements Runnable {
 		this.upperDataRateLimitKB = upperDataRateLimitKB;
 		shutdown = new AtomicBoolean(false);
 		shutdownLatch = new CountDownLatch(1);
+		
+		// record initial memory use
+		initialMemoryUsageInBytes = getSettledUsedMemory();
 	}
 
+	private long getSettledUsedMemory() {
+		long m;
+		long m2 = getReallyUsedMemory();
+		do {
+			try {
+				// wait for 100ms
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+			}
+
+			m = m2;
+			m2 = ForcedGcMemoryProfiler.getUsedMemory();
+		} while (m2 < getReallyUsedMemory());
+		return m;
+	}
+	
+	private long getCurrentlyUsedMemory() {
+		return ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed()
+				+ ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage().getUsed();
+	}
+
+	private long getGcCount() {
+		long sum = 0;
+		for (GarbageCollectorMXBean b : ManagementFactory.getGarbageCollectorMXBeans()) {
+			long count = b.getCollectionCount();
+			if (count != -1) {
+				sum += count;
+			}
+		}
+		return sum;
+	}
+
+	private long getReallyUsedMemory() {
+		long before = getGcCount();
+		System.gc();
+		while (getGcCount() == before)
+			;
+		return getCurrentlyUsedMemory();
+	}
+	
+	private void reportPeakMemoryUse() {
+		long settledMemoryInBytes = getSettledUsedMemory();
+
+		if (settledMemoryInBytes > peakMemoryUsageInBytes) {
+			peakMemoryUsageInBytes = settledMemoryInBytes;
+		}
+
+		long memoryIncreaseInBytes = (peakMemoryUsageInBytes - initialMemoryUsageInBytes);
+		
+		System.out.format("[FSThrottledProducer] - peakMemoryUsageInBytes=%d%n", peakMemoryUsageInBytes);
+		System.out.format("[FSThrottledProducer] - memoryIncreaseInBytes=%d%n", memoryIncreaseInBytes);
+		System.out.format("[FSThrottledProducer] - delta=%d%n", (memoryIncreaseInBytes - previousIncreaseInBytes));
+		
+		previousIncreaseInBytes = memoryIncreaseInBytes;
+	}
+	
 	private byte[] getPayload() {
 		
 		if (payload == null) {
@@ -104,7 +176,17 @@ public class FSThrottledProducer implements Runnable {
 			int throughput = (messagesSentInCurrentWindow * payloadSizeInKB)
 					/ (throughputDebugIntervalInSec * KBs_IN_MB);
 			System.out.format("[FSThrottledProducer] - Throughput in window: %d MB/s.%n", throughput);
-
+			
+			if (isReportMemory) {
+				// only report memory use every 10 windows
+				if (reportMemoryCount % 10 == 0) {
+					reportPeakMemoryUse();
+					reportMemoryCount = 1;
+				}
+				
+				reportMemoryCount++;
+			}
+			
 			// Reset ready for the next throughput indication
 			windowStartTimeInMillis = System.currentTimeMillis();
 			messagesSentInCurrentWindow = 0;
@@ -225,4 +307,5 @@ class FSCallBack implements Callback {
 			exception.printStackTrace();
 		}
 	}
+	
 }
