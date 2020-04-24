@@ -246,7 +246,7 @@ public class FSThrottledProducer implements Runnable {
 			// async call to send
 			producer.send(producerRecord, callback);
 
-			//System.out.println("[FSThrottledProducer] - sent message.");
+			//System.out.format("[FSThrottledProducer] - sent message of length %d.%n", payload.length);
 			
 			flushMessages(messageCount);
 			messageCount++;

@@ -7,15 +7,6 @@ import java.util.List;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.cache2k.benchmark.jmh.ForcedGcMemoryProfiler;
 
-/**
- * Based on:
- * https://github.com/apache/kafka/blob/trunk/examples/src/main/java/kafka/examples/Consumer.java
- * 
- * @author nic
- *
- * @param Integer
- * @param String
- */
 public class FSConsumer<K, V> extends AConsumer {
 
 	private long initialMemoryUsageInBytes = 0;
@@ -23,6 +14,8 @@ public class FSConsumer<K, V> extends AConsumer {
 	private long peakMemoryUsageInBytes = 0;
 
 	private long previousIncreaseInBytes = 0;
+	
+	private int reportMemoryCount = 1;
 	
 	public FSConsumer(Consumer consumer, List<String> topics) {
 		super(consumer, topics);
@@ -38,13 +31,13 @@ public class FSConsumer<K, V> extends AConsumer {
 			peakMemoryUsageInBytes = settledMemoryInBytes;
 		}
 		
-		long memoryIncreaseInBytes = (peakMemoryUsageInBytes - initialMemoryUsageInBytes);
+		long totalMemoryIncreaseInBytes = (peakMemoryUsageInBytes - initialMemoryUsageInBytes);
 		
 		System.out.format("[FSConsumer] - peakMemoryUsageInBytes=%d%n", peakMemoryUsageInBytes);
-		System.out.format("[FSConsumer] - memoryIncreaseInBytes=%d%n", memoryIncreaseInBytes);
-		System.out.format("[FSConsumer] - delta=%d%n", (memoryIncreaseInBytes - previousIncreaseInBytes));
+		System.out.format("[FSConsumer] - totalMemoryIncreaseInBytes=%d%n", totalMemoryIncreaseInBytes);
+		System.out.format("[FSConsumer] - increaseFromPreviousReport=%d%n", (totalMemoryIncreaseInBytes - previousIncreaseInBytes));
 		
-		previousIncreaseInBytes = memoryIncreaseInBytes;
+		previousIncreaseInBytes = totalMemoryIncreaseInBytes;
 	}
 
 	private long getCurrentlyUsedMemory() {
@@ -76,7 +69,7 @@ public class FSConsumer<K, V> extends AConsumer {
 		long m2 = getReallyUsedMemory();
 		do {
 			try {
-				Thread.sleep(567);
+				Thread.sleep(100);
 			} catch (InterruptedException e) {
 			}
 
@@ -86,21 +79,15 @@ public class FSConsumer<K, V> extends AConsumer {
 		return m;
 	}
 
-//	private void reportToEndpoint() {
-//		String endpointUrl = "print";
-//
-//		if (this.properties.containsKey("ENDPOINT_URL")) {
-//			endpointUrl = (String) this.properties.get("ENDPOINT_URL");
-//		}
-//
-//		if (endpointUrl.startsWith("http://")) {
-//			// TODO
-//		}
-//	}
-
-	protected void report(long kBsInWindow, long windowLengthInSecs) {
-		super.report(kBsInWindow, windowLengthInSecs);
-		reportPeakMemoryUse();
-		// reportToEndpoint();
+	protected void report(long kBsInWindow) {
+		super.report(kBsInWindow);
+		
+		// report as specified
+		// the +5 means we report on the *first* time called ;)
+		if ((reportMemoryCount+5) % 6 == 0) {
+			reportPeakMemoryUse();
+		}
+		
+		reportMemoryCount++;
 	}
 }

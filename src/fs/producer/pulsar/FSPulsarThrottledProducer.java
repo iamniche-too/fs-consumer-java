@@ -1,0 +1,276 @@
+package fs.producer.pulsar;
+
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
+import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.apache.pulsar.client.api.Producer;
+import org.apache.pulsar.client.api.PulsarClient;
+import org.apache.pulsar.client.api.PulsarClientException;
+import org.cache2k.benchmark.jmh.ForcedGcMemoryProfiler;
+
+public class FSPulsarThrottledProducer implements Runnable {
+
+	private int messageSizeInKB;
+
+	private Producer<byte[]> producer;
+
+	private AtomicBoolean shutdown;
+
+	private final CountDownLatch shutdownLatch;
+
+	private String topicName;
+
+	private int messageKey = 0;
+
+	private boolean rateIsExceeded = false;
+
+	private int rateCurrentSecond = 0;
+
+	private int rateForSecondSoFar = 0;
+
+	private int upperDataRateLimitKB;
+
+	private int messagesSentInCurrentWindow = 0;
+
+	private long windowStartTimeInMillis;
+
+	private int throughputDebugIntervalInSec = 10;
+
+	private static int KBs_IN_MB = 1000;
+
+	private int maxPayloadsBeforeFlush = 5;
+
+	private long totalTransferredInKB;
+
+	private byte[] payload = null;
+
+	private long initialMemoryUsageInBytes = 0;
+
+	private long peakMemoryUsageInBytes = 0;
+
+	private long previousIncreaseInBytes = 0;
+
+	private int reportMemoryCount = 1;
+
+	private boolean isReportMemory = false;
+
+	public FSPulsarThrottledProducer(PulsarClient client, String topicName, int messageSizeInKB, int upperDataRateLimitKB)
+			throws PulsarClientException {
+		this.messageSizeInKB = messageSizeInKB;
+		this.topicName = topicName;
+		this.upperDataRateLimitKB = upperDataRateLimitKB;
+		shutdown = new AtomicBoolean(false);
+		shutdownLatch = new CountDownLatch(1);
+
+		producer = client.newProducer().topic(topicName).create();
+
+		// record initial memory use
+		initialMemoryUsageInBytes = getSettledUsedMemory();
+	}
+
+	private long getSettledUsedMemory() {
+		long m;
+		long m2 = getReallyUsedMemory();
+		do {
+			try {
+				// wait for 100ms
+				Thread.sleep(100);
+			} catch (InterruptedException e) {
+			}
+
+			m = m2;
+			m2 = ForcedGcMemoryProfiler.getUsedMemory();
+		} while (m2 < getReallyUsedMemory());
+		return m;
+	}
+
+	private long getCurrentlyUsedMemory() {
+		return ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed()
+				+ ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage().getUsed();
+	}
+
+	private long getGcCount() {
+		long sum = 0;
+		for (GarbageCollectorMXBean b : ManagementFactory.getGarbageCollectorMXBeans()) {
+			long count = b.getCollectionCount();
+			if (count != -1) {
+				sum += count;
+			}
+		}
+		return sum;
+	}
+
+	private long getReallyUsedMemory() {
+		long before = getGcCount();
+		System.gc();
+		while (getGcCount() == before)
+			;
+		return getCurrentlyUsedMemory();
+	}
+
+	private void reportPeakMemoryUse() {
+		long settledMemoryInBytes = getSettledUsedMemory();
+
+		if (settledMemoryInBytes > peakMemoryUsageInBytes) {
+			peakMemoryUsageInBytes = settledMemoryInBytes;
+		}
+
+		long memoryIncreaseInBytes = (peakMemoryUsageInBytes - initialMemoryUsageInBytes);
+
+		System.out.format("[FSPulsarThrottledProducer] - peakMemoryUsageInBytes=%d%n", peakMemoryUsageInBytes);
+		System.out.format("[FSPulsarThrottledProducer] - memoryIncreaseInBytes=%d%n", memoryIncreaseInBytes);
+		System.out.format("[FSPulsarThrottledProducer] - delta=%d%n",
+				(memoryIncreaseInBytes - previousIncreaseInBytes));
+
+		previousIncreaseInBytes = memoryIncreaseInBytes;
+	}
+
+	private byte[] getPayload() {
+
+		if (payload == null) {
+			System.out.println("[FSPulsarThrottledProducer] - generating payload...");
+			long before = System.currentTimeMillis();
+			payload = new byte[messageSizeInKB * 1000];
+			new Random().nextBytes(payload);
+			long after = System.currentTimeMillis();
+			long differenceInSecs = (after - before) / 1000;
+			System.out.println("[FSPulsarThrottledProducer] - payload generated in " + differenceInSecs + " secs.");
+		}
+
+		return payload;
+	}
+
+	private String getMessageKey() {
+		return String.valueOf(messageKey++);
+	}
+
+	public void payloadReceived(int payloadSizeInKB) {
+		long currentTimeInMillis = System.currentTimeMillis();
+
+		// are we in the same second?
+		if ((int) (currentTimeInMillis / 1000) != rateCurrentSecond) {
+			// We are in a new second, we can reset rate throttling
+			rateIsExceeded = false;
+			rateForSecondSoFar = 0;
+			rateCurrentSecond = (int) (currentTimeInMillis / 1000);
+		}
+
+		// Add the payload we've sent to the total so far
+		rateForSecondSoFar += payloadSizeInKB;
+		totalTransferredInKB += payloadSizeInKB;
+
+		// Check if we've exceeded the upper limit of the rate
+		if (rateForSecondSoFar >= upperDataRateLimitKB) {
+			rateIsExceeded = true;
+		}
+
+		// Output any throughput debug
+		messagesSentInCurrentWindow += 1;
+
+		int windowLengthSec = (int) ((currentTimeInMillis - windowStartTimeInMillis) / 1000);
+
+		if (windowLengthSec >= throughputDebugIntervalInSec) {
+			int throughput = (messagesSentInCurrentWindow * payloadSizeInKB)
+					/ (throughputDebugIntervalInSec * KBs_IN_MB);
+			System.out.format("[FSPulsarThrottledProducer] - Throughput in window: %d MB/s.%n", throughput);
+
+			if (isReportMemory) {
+				// only report memory use every 10 windows
+				if (reportMemoryCount % 10 == 0) {
+					reportPeakMemoryUse();
+					reportMemoryCount = 1;
+				}
+
+				reportMemoryCount++;
+			}
+
+			// Reset ready for the next throughput indication
+			windowStartTimeInMillis = System.currentTimeMillis();
+			messagesSentInCurrentWindow = 0;
+		}
+	}
+
+	private void throttle() {
+		// Check for rate being exceeded
+		// i.e. we are sending data > upper rate limit
+		while (rateIsExceeded) {
+			// System.out.println("[FSPulsarThrottledProducer - rate exceeded,
+			// throttling...");
+
+			// sleep for 10ms
+			try {
+				Thread.sleep(10);
+			} catch (InterruptedException e) {
+			}
+
+			// Check the current second
+			long currentTimeInMillis = System.currentTimeMillis();
+
+			// Remove rate limiting if we are in a new second
+			if ((int) (currentTimeInMillis / 1000) != rateCurrentSecond) {
+				rateIsExceeded = false;
+				rateForSecondSoFar = 0;
+			}
+		}
+	}
+
+	private void flushMessages(int messageCount) {
+		// Flush periodically so we can manage data rates effectively.
+		// Produce is async so can get way ahead of writes actually being ack'd by
+		// Kafka. If we don't do this
+		// then we can't manage the data rate effectively.
+		// The flush rate may need tuning.
+		if ((messageCount + 1) % maxPayloadsBeforeFlush == 0) {
+			// System.out.println("[FSProducer]- Flushing sent messages.");
+			try {
+				producer.flush();
+			} catch (PulsarClientException e) {
+				System.out.format("[FSPulsarThrottledProducer] - exception flushing messages, %s. %n", e.getMessage());
+			}
+		}
+	}
+
+	public void run() {
+		System.out.format("[FSPulsarThrottledProducer] - Configured with message size %sKB, date rate %s KB/s %n",
+				messageSizeInKB, upperDataRateLimitKB);
+
+		windowStartTimeInMillis = System.currentTimeMillis();
+
+		int messageCount = 0;
+		while (!shutdown.get()) {
+			throttle();
+
+			byte[] payload = getPayload();
+			String messageKey = getMessageKey();
+			producer.newMessage().key(messageKey).value(payload).sendAsync().thenAccept(messageId -> {
+				if (payload != null) {
+					int messageSize = payload.length / 1000;
+					payloadReceived(messageSize);
+					System.out.format("[FSPulsarThrottledProducer] - ACK received for %d KBs.%n", messageSize);
+				}
+			});
+
+			flushMessages(messageCount);
+			messageCount++;
+		}
+
+		try {
+			producer.close();
+		} catch (PulsarClientException e) {
+			System.out.format("[FSPulsarThrottledProducer] - Error closing producer %s.%n", e.getMessage());
+		}
+		shutdownLatch.countDown();
+
+		System.out.println("[FSPulsarThrottledProducer] - Exiting...");
+	}
+
+	public void shutdown() throws InterruptedException {
+		System.out.println("[[FSPulsarThrottledProducer] - Shutting down...");
+		System.out.format("[[FSPulsarThrottledProducer] - Total bytes transferred=%d KB.%n", totalTransferredInKB);
+		shutdown.set(true);
+		shutdownLatch.await();
+	}
+}

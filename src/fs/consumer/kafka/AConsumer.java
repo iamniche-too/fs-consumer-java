@@ -12,11 +12,20 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.WakeupException;
 
+/**
+ * Based on:
+ * https://github.com/apache/kafka/blob/trunk/examples/src/main/java/kafka/examples/Consumer.java
+ * 
+ * @author nic
+ *
+ * @param Integer
+ * @param String
+ */
 public abstract class AConsumer<K, V> implements Runnable {
 
 	protected static final String MESSAGE_TIMESTAMP = "MESSAGE_TIMESTAMP";
 
-	protected static final String MESSAGE_SIZE_KBS = "MESSAGE_SIZE_KBS";
+	protected static final String MESSAGE_SIZE_KB = "MESSAGE_SIZE_KB";
 
 	protected static final String MESSAGE_TOPIC = "MESSAGE_TOPIC";
 
@@ -28,13 +37,11 @@ public abstract class AConsumer<K, V> implements Runnable {
 
 	private CountDownLatch shutdownLatch;
 
-	private long POLL_INTERVAL_IN_MS = 5 * 1000;
+	private long POLL_INTERVAL_IN_MS = 1 * 1000;
 
-	private long THROUGHPUT_DEBUG_INTERVAL_SEC = 10;
+	private long THROUGHPUT_DEBUG_INTERVAL_IN_MILLIS = 10 * 1000;
 
 	private int NO_MESSAGE_REPORTING_INTERVAL_IN_MILLIS = 10 * 1000;
-
-	private int KBS_IN_MB = 1000;
 
 	private int noMessageCount = 0;
 
@@ -60,22 +67,24 @@ public abstract class AConsumer<K, V> implements Runnable {
 		// extract metadata to map so ConsumerRecord doesn't "pollute" this codebase
 		Map<String, Object> meta = new HashMap<String, Object>();
 		meta.put(MESSAGE_TOPIC, record.topic());
-		meta.put(MESSAGE_SIZE_KBS, record.serializedValueSize() / 1000);
+		int messageSizeKB = record.serializedValueSize() / 1000;
+		//System.out.format("[FSConsumer] - Received message of size %d KB.%n", messageSizeKB);
+		meta.put(MESSAGE_SIZE_KB, messageSizeKB);
 		meta.put(MESSAGE_TIMESTAMP, record.timestamp());
 		
 		return meta;
 	}
 
 
-	private void reportThroughput(long kBsInWindow, long windowLengthInSecs) {
-		float throughputMBPerS = (float) (kBsInWindow / (float) (windowLengthInSecs * KBS_IN_MB));
+	private void reportThroughput(long kBsInWindow) {
+		float throughputMBPerS = (float) (kBsInWindow / THROUGHPUT_DEBUG_INTERVAL_IN_MILLIS);
 		System.out.format("[AConsumer] - Throughput in window (%d KB in %d secs): %.2f MB/s%n", kBsInWindow,
-				windowLengthInSecs, throughputMBPerS);
+				THROUGHPUT_DEBUG_INTERVAL_IN_MILLIS/1000, throughputMBPerS);
 		System.out.format("[AConsumer] - Total transferred: %d MBs%n", totalKBsTransferred / 1000);
 	}
 	
-	protected void report(long kBsInWindow, long windowLengthInSecs) {
-		reportThroughput(kBsInWindow, windowLengthInSecs);
+	protected void report(long kBsInWindow) {
+		reportThroughput(kBsInWindow);
 	}
 
 	private void processNoMessage() {
@@ -92,10 +101,10 @@ public abstract class AConsumer<K, V> implements Runnable {
 	// process the metadata from the message
 	protected void processMeta(Map<String, Object> meta) {
 		// Maintain figures for throughput reporting
-		int messageSize = (int) meta.get(MESSAGE_SIZE_KBS);
+		int messageSizeInKB = (int) meta.get(MESSAGE_SIZE_KB);
 
-		kBsInWindow += messageSize;
-		totalKBsTransferred += messageSize;
+		kBsInWindow += messageSizeInKB;
+		totalKBsTransferred += messageSizeInKB;
 	}
 	
 	public void run() {
@@ -127,14 +136,9 @@ public abstract class AConsumer<K, V> implements Runnable {
 					} else {
 						processNoMessage();
 					}
-
-					consumer.commitAsync();
 					
-					// Determine if we should report throughput
-					long windowLengthInSecs = (this.currentTime - this.windowStartTime) / 1000;
-
-					if (windowLengthInSecs > THROUGHPUT_DEBUG_INTERVAL_SEC) {
-						report(kBsInWindow, windowLengthInSecs);
+					if ((currentTime - windowStartTime) > THROUGHPUT_DEBUG_INTERVAL_IN_MILLIS) {
+						report(kBsInWindow);
 
 						// Reset ready for the next throughput indication
 						windowStartTime = System.currentTimeMillis();

@@ -16,6 +16,8 @@ public class FSProducerMain {
 	
 	private static final String BOOTSTRAP_SERVERS = "BOOTSTRAP_SERVERS";
 	
+	private static final String TOPIC_NAMES = "TOPIC_NAMES";
+	
 	public static void main(String[] args) {
 
 		int messageSizeInKB;
@@ -43,6 +45,14 @@ public class FSProducerMain {
 			bootstrapServers = "localhost:9092";
 		}
 		
+		String topicNames;
+		if (envMap.containsKey(TOPIC_NAMES)) {
+			topicNames = envMap.get(TOPIC_NAMES);
+		} else {
+			System.out.format("Warning - TOPIC_NAMES missing from environment, defaulting to sensor0");
+			topicNames = "sensor0";
+		}
+		
 		Properties props = new Properties();
 		props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
 		props.put(ProducerConfig.CLIENT_ID_CONFIG, "FSThrottledProducer");
@@ -51,8 +61,7 @@ public class FSProducerMain {
 
 		KafkaProducer producer = new KafkaProducer<>(props);
 
-		String topic = "test";
-		FSThrottledProducer fsProducer = new FSThrottledProducer(producer, topic, messageSizeInKB, upperRateLimitInKB);
+		FSThrottledProducer fsProducer = new FSThrottledProducer(producer, topicNames, messageSizeInKB, upperRateLimitInKB);
 		Thread thread = new Thread(fsProducer);
 		thread.start();
 	}

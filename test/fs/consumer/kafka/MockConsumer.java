@@ -35,7 +35,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
 	private String KEY = "Key";
 
-	public MockConsumer() {
+	private boolean sendMessages = false;
+	
+	public MockConsumer(boolean sendMessages) {
+		this.sendMessages = sendMessages;
 	}
 
 	@Override
@@ -109,14 +112,15 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 		
 		List<ConsumerRecord<K, V>> list = new ArrayList<ConsumerRecord<K, V>>();
 		
-		long timestamp = System.currentTimeMillis();
-		long checksum = 0;
-		byte[] payload = generatePayload();
-		//System.out.println("[MockConsumer] - payload is " + payload.length + " bytes");
-		ConsumerRecord<K, V> record = new ConsumerRecord<K, V>(topic, partition, offset, timestamp, TimestampType.LOG_APPEND_TIME, checksum, 0, payload.length, (K)KEY, (V)payload);
-		list.add(record);
-		
-		map.put(new TopicPartition(topic, 1), list);
+		if (sendMessages) {
+			long timestamp = System.currentTimeMillis();
+			long checksum = 0;
+			byte[] payload = generatePayload();
+			//System.out.println("[MockConsumer] - payload is " + payload.length + " bytes");
+			ConsumerRecord<K, V> record = new ConsumerRecord<K, V>(topic, partition, offset, timestamp, TimestampType.LOG_APPEND_TIME, checksum, 0, payload.length, (K)KEY, (V)payload);
+			list.add(record);
+			map.put(new TopicPartition(topic, 1), list);
+		}
 		
 		ConsumerRecords<K, V> records = new ConsumerRecords<K, V>(map);
 		return records;
